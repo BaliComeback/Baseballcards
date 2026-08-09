@@ -1,0 +1,6 @@
+{
+  "name": "Extractor de Tarjetas Coleccionables",
+  "description": "Detecta, recorta e identifica cada tarjeta en imágenes con número y jugador.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
