@@ -14,7 +14,15 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: hmrEnabled ? true : false,
+      host: '0.0.0.0',
+      port: 5173,
+      strictPort: true,
+      hmr: hmrEnabled ? {
+        protocol: 'ws',
+        host: 'localhost',
+        port: 5173,
+        clientPort: 5173,
+      } : false,
       watch: hmrEnabled ? {} : null,
     },
   };
