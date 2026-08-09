@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { SavedCard, getSavedCards, deleteSavedCard, updateSavedCard, deleteMultipleSavedCards, batchUpdateSavedCards, deduplicateCollection, saveEntireCollection, clearDatabase } from "../utils/db";
-import { Search, Trash2, Download, Filter, LayoutGrid, FileText, X, Edit3, Save, Eye, TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, RefreshCw, Sparkles, Image as ImageIcon, Upload, Layers, CheckSquare, Square, Check, ListChecks, Settings2, SlidersHorizontal, FolderDown, Database, Table, Plus, Minus, CheckCircle2, FileSpreadsheet, ExternalLink, RotateCcw } from "lucide-react";
+import { Search, Trash2, Download, Filter, LayoutGrid, FileText, X, Edit3, Save, Eye, TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, RefreshCw, Sparkles, Image as ImageIcon, Upload, Layers, CheckSquare, Square, Check, ListChecks, Settings2, SlidersHorizontal, FolderDown, Database, Table, Plus, Minus, CheckCircle2, FileSpreadsheet, ExternalLink, RotateCcw, ShieldAlert, AlertTriangle } from "lucide-react";
 import { downloadCardImage, downloadCardsZip, exportCardsToCSV, generateCardBackImage } from "../utils/cropUtils";
 import { generateCollectionPDF } from "../utils/pdfExport";
 import { exportCardsToGoogleSheets } from "../utils/googleSheets";
@@ -53,10 +53,15 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
   const [batchValue, setBatchValue] = useState("");
   const [batchQuantity, setBatchQuantity] = useState("");
 
+  // Clear Database Protection Modal State
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+
   // Market Modal State
   const [marketModalCard, setMarketModalCard] = useState<SavedCard | null>(null);
   const [isMarketModalOpen, setIsMarketModalOpen] = useState(false);
   const [isBatchUpdatingPrices, setIsBatchUpdatingPrices] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
   // Google Sheets state
   const [isExportingSheets, setIsExportingSheets] = useState(false);
@@ -111,6 +116,9 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
       return;
     }
     const count = selectedCardIds.length;
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar las ${count} tarjeta(s) seleccionadas de la base de datos?`)) {
+      return;
+    }
     const remainingCards = cards.filter((c) => !selectedCardIds.includes(c.id));
     const updated = await saveEntireCollection(remainingCards);
     setCards(updated);
@@ -226,6 +234,7 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
 
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta tarjeta de la base de datos?")) return;
     const updated = await deleteSavedCard(id);
     setCards(updated);
     setSelectedCardIds((prev) => prev.filter((i) => i !== id));
@@ -236,12 +245,24 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
     setTimeout(() => setDbSaveMessage(null), 3000);
   };
 
-  const handleClearAll = async () => {
+  const handleOpenClearModal = () => {
+    if (cards.length === 0) {
+      alert("La base de datos ya está vacía.");
+      return;
+    }
+    setClearConfirmText("");
+    setIsClearModalOpen(true);
+  };
+
+  const handleConfirmClearAll = async () => {
+    if (clearConfirmText.trim().toUpperCase() !== "BORRAR") return;
     await clearDatabase();
     setCards([]);
     setSelectedCard(null);
     setSelectedCardIds([]);
     setSheetsUrl(null);
+    setIsClearModalOpen(false);
+    setClearConfirmText("");
     setDbSaveMessage("¡Base de datos completamente vaciada y reiniciada! El programa está limpio para comenzar de nuevo.");
     setTimeout(() => setDbSaveMessage(null), 5000);
   };
@@ -384,11 +405,16 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
 
   // Batch update estimated prices for all cards in collection
   const handleBatchUpdatePrices = async () => {
-    if (cards.length === 0) return;
+    if (cards.length === 0) {
+      alert("No hay tarjetas guardadas en la base de datos para consultar el mercado online.");
+      return;
+    }
     setIsBatchUpdatingPrices(true);
+    setBatchProgress({ current: 0, total: cards.length });
     try {
       let updatedCollection = [...cards];
       for (let i = 0; i < updatedCollection.length; i++) {
+        setBatchProgress({ current: i + 1, total: updatedCollection.length });
         const card = updatedCollection[i];
         try {
           const res = await fetch("/api/card-market-price", {
@@ -410,7 +436,7 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                 estimatedValue: data.estimatedValue,
                 estimatedPriceMin: data.priceMin,
                 estimatedPriceMax: data.priceMax,
-                marketSource: "eBay/130Point (Auto IA)",
+                marketSource: "Mercado Online IA",
                 marketLastUpdated: Date.now(),
                 // Fill missing details automatically
                 ...(data.detectedTeam && (!card.team || card.team === "Desconocido") ? { team: data.detectedTeam } : {}),
@@ -431,6 +457,8 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
           await new Promise((resolve) => setTimeout(resolve, 400));
         }
       }
+      setDbSaveMessage(`Consulta de mercado online finalizada con éxito para los ${updatedCollection.length} items de la colección.`);
+      setTimeout(() => setDbSaveMessage(null), 4000);
     } finally {
       setIsBatchUpdatingPrices(false);
     }
@@ -587,7 +615,7 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Boton de Guardar Base de Datos */}
+          {/* Guardar Base de Datos */}
           <button
             onClick={handleSaveDatabase}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer ${
@@ -598,42 +626,39 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
             title="Guardar todos los cambios realizados en la base de datos local"
           >
             <Save className="w-4 h-4" />
-            <span>Boton de Guardar Base de Datos</span>
+            <span>Guardar Base de Datos</span>
             {hasUnsavedChanges && (
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             )}
           </button>
 
           <button
-            onClick={() => {
-              setMarketModalCard(null);
-              setIsMarketModalOpen(true);
-            }}
-            className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5"
+            onClick={handleBatchUpdatePrices}
+            disabled={isBatchUpdatingPrices || cards.length === 0}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg border cursor-pointer ${
+              isBatchUpdatingPrices
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                : cards.length === 0
+                ? "bg-slate-800/50 text-slate-500 border-slate-800 cursor-not-allowed"
+                : "bg-amber-500 hover:bg-amber-400 text-slate-950 border-amber-400"
+            }`}
+            title="Consulta de mercado online para búsqueda y actualización de precios de todos los items en la colección"
           >
-            <TrendingUp className="w-4 h-4" />
-            Consulta de Mercado Online
+            <TrendingUp className={`w-4 h-4 ${isBatchUpdatingPrices ? "animate-spin" : ""}`} />
+            <span>
+              {isBatchUpdatingPrices
+                ? `Consultando Mercado (${batchProgress.current}/${batchProgress.total})...`
+                : "Consulta de Mercado Online"}
+            </span>
           </button>
 
           {cards.length > 0 && (
             <button
-              onClick={handleBatchUpdatePrices}
-              disabled={isBatchUpdatingPrices}
-              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
-              title="Obtener la cotización estimada de todas las tarjetas registradas"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isBatchUpdatingPrices ? "animate-spin" : ""}`} />
-              {isBatchUpdatingPrices ? "Cotizando Lote..." : "Cotizar Precios Online"}
-            </button>
-          )}
-
-          {cards.length > 0 && (
-            <button
-              onClick={handleClearAll}
+              onClick={handleOpenClearModal}
               className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Eliminar absolutamente todos los datos guardados y reiniciar la base de datos limpia"
+              title="Protegido: Eliminar todos los datos guardados de la base de datos"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
               Limpiar Base de Datos
             </button>
           )}
@@ -972,7 +997,7 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
 
         {/* Right: Action Buttons (Guardar Base de Datos, Modificar, Eliminar, Limpiar Duplicados) */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Boton de Guardar Base de Datos */}
+          {/* Guardar Base de Datos */}
           <button
             onClick={handleSaveDatabase}
             className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
@@ -983,11 +1008,11 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
             title="Guardar cambios pendientes directamente en la Base de Datos"
           >
             <Save className="w-3.5 h-3.5" />
-            Boton de Guardar Base de Datos
+            Guardar Base de Datos
             {hasUnsavedChanges && <span className="w-2 h-2 rounded-full bg-amber-400" />}
           </button>
 
-          {/* Boton de Modificar Seleccionadas */}
+          {/* Modificar Seleccionadas */}
           <button
             onClick={() => {
               if (selectedCardIds.length === 0) {
@@ -1002,13 +1027,13 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                 ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-md cursor-pointer"
                 : "bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed"
             }`}
-            title="Boton de Modificar: Modificar información de las tarjetas seleccionadas"
+            title="Modificar información de las tarjetas seleccionadas"
           >
             <Edit3 className="w-3.5 h-3.5" />
-            Boton de Modificar
+            Modificar
           </button>
 
-          {/* Boton de Eliminar Seleccionadas */}
+          {/* Eliminar Seleccionadas */}
           <button
             onClick={handleBatchDelete}
             disabled={selectedCardIds.length === 0}
@@ -1017,13 +1042,13 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                 ? "bg-red-500 hover:bg-red-400 text-white shadow-md cursor-pointer"
                 : "bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed"
             }`}
-            title="Boton de Eliminar: Eliminar las tarjetas seleccionadas de la base de datos"
+            title="Eliminar las tarjetas seleccionadas de la base de datos"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Boton de Eliminar
+            Eliminar
           </button>
 
-          {/* Boton Limpieza Base de Datos No Duplicados */}
+          {/* Limpieza Base de Datos No Duplicados */}
           <button
             onClick={handleDeduplicateDB}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer ml-1"
@@ -1739,6 +1764,72 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                 className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-md cursor-pointer"
               >
                 Guardar Modificaciones
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear Database Protection Modal */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-red-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative text-center">
+            <button
+              onClick={() => setIsClearModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 bg-red-500/20 rounded-full border border-red-500/40 flex items-center justify-center mx-auto mb-4 text-red-400 shadow-inner">
+              <ShieldAlert className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-2">
+              ¿Eliminar toda la Base de Datos?
+            </h3>
+
+            <div className="bg-red-950/30 border border-red-800/40 rounded-xl p-3.5 mb-4 text-left">
+              <p className="text-xs text-red-200 font-medium leading-relaxed">
+                ⚠️ <strong className="text-red-400">Atención:</strong> Esta acción borrará permanentemente <strong className="text-white underline">{cards.length} tarjeta(s)</strong> registradas en tu colección local, incluyendo fotos, cantidades y precios estimativos.
+              </p>
+              <p className="text-[11px] text-red-300/80 mt-1.5">
+                Esta acción no se puede deshacer de forma automática.
+              </p>
+            </div>
+
+            <div className="text-left mb-5">
+              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                Para confirmar, escribe la palabra <span className="text-red-400 font-bold">BORRAR</span> a continuación:
+              </label>
+              <input
+                type="text"
+                value={clearConfirmText}
+                onChange={(e) => setClearConfirmText(e.target.value)}
+                placeholder="Escribe BORRAR aquí..."
+                className="w-full bg-slate-950 border border-red-500/40 rounded-xl px-3.5 py-2.5 text-red-300 font-mono font-bold tracking-widest uppercase focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 text-center text-sm"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setIsClearModalOpen(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmClearAll}
+                disabled={clearConfirmText.trim().toUpperCase() !== "BORRAR"}
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                  clearConfirmText.trim().toUpperCase() === "BORRAR"
+                    ? "bg-red-600 hover:bg-red-500 text-white shadow-red-900/40"
+                    : "bg-slate-800 text-slate-600 border border-slate-700 cursor-not-allowed"
+                }`}
+              >
+                <Trash2 className="w-4 h-4" />
+                Confirmar Limpieza
               </button>
             </div>
           </div>

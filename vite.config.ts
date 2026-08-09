@@ -15,13 +15,12 @@ export default defineConfig(() => {
     },
     server: {
       host: '0.0.0.0',
-      port: 5173,
-      strictPort: true,
+      port: 3000,
       hmr: hmrEnabled ? {
         protocol: 'ws',
         host: 'localhost',
-        port: 5173,
-        clientPort: 5173,
+        port: 3000,
+        clientPort: 3000,
       } : false,
       watch: hmrEnabled ? {} : null,
     },
