@@ -1,12 +1,13 @@
 import React from "react";
 import { DetectedCard } from "../types";
-import { RotateCw, Download, Edit3, Trash2, CheckCircle, Tag, Shield } from "lucide-react";
+import { RotateCw, Download, Edit3, Trash2, CheckCircle, Tag, Shield, Layers, RefreshCw } from "lucide-react";
 
 interface CardItemCardProps {
   card: DetectedCard;
   isSelected: boolean;
   onSelect: () => void;
   onRotate: () => void;
+  onToggleSide?: () => void;
   onEdit: () => void;
   onDownload: () => void;
   onDelete: () => void;
@@ -17,6 +18,7 @@ export const CardItemCard: React.FC<CardItemCardProps> = ({
   isSelected,
   onSelect,
   onRotate,
+  onToggleSide,
   onEdit,
   onDownload,
   onDelete,
@@ -41,10 +43,29 @@ export const CardItemCard: React.FC<CardItemCardProps> = ({
           </h3>
         </div>
 
-        {card.side && card.side !== "unknown" && (
-          <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60 shrink-0">
-            {card.side === "front" ? "Frente" : "Reverso"}
-          </span>
+        {/* Dynamic Side Switcher Badge */}
+        {onToggleSide ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSide();
+            }}
+            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-lg border transition-all flex items-center gap-1 shrink-0 cursor-pointer ${
+              card.side === "back"
+                ? "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
+                : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+            }`}
+            title="Haz clic para alternar dinámicamente entre Frente y Reverso"
+          >
+            <Layers className="w-3 h-3" />
+            <span>{card.side === "back" ? "Reverso" : "Frente"}</span>
+          </button>
+        ) : (
+          card.side && card.side !== "unknown" && (
+            <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60 shrink-0">
+              {card.side === "front" ? "Frente" : "Reverso"}
+            </span>
+          )
         )}
       </div>
 
@@ -64,6 +85,18 @@ export const CardItemCard: React.FC<CardItemCardProps> = ({
 
         {/* Quick action overlay bar */}
         <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-slate-950/90 backdrop-blur-md p-1 rounded-lg border border-slate-800 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          {onToggleSide && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSide();
+              }}
+              className="p-1.5 rounded hover:bg-slate-800 text-slate-300 hover:text-purple-400 transition-colors"
+              title="Cambiar Lado (Frente / Reverso)"
+            >
+              <Layers className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

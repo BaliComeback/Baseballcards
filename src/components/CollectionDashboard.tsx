@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { SavedCard, getSavedCards, deleteSavedCard, updateSavedCard, deleteMultipleSavedCards, batchUpdateSavedCards, deduplicateCollection, saveEntireCollection, clearDatabase } from "../utils/db";
-import { Search, Trash2, Download, Filter, LayoutGrid, FileText, X, Edit3, Save, Eye, TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, RefreshCw, Sparkles, Image as ImageIcon, Upload, Layers, CheckSquare, Square, Check, ListChecks, Settings2, SlidersHorizontal, FolderDown, Database, Table, Plus, Minus, CheckCircle2 } from "lucide-react";
+import { Search, Trash2, Download, Filter, LayoutGrid, FileText, X, Edit3, Save, Eye, TrendingUp, DollarSign, PieChart as PieChartIcon, BarChart3, RefreshCw, Sparkles, Image as ImageIcon, Upload, Layers, CheckSquare, Square, Check, ListChecks, Settings2, SlidersHorizontal, FolderDown, Database, Table, Plus, Minus, CheckCircle2, FileSpreadsheet, ExternalLink, RotateCcw } from "lucide-react";
 import { downloadCardImage, downloadCardsZip, exportCardsToCSV, generateCardBackImage } from "../utils/cropUtils";
 import { generateCollectionPDF } from "../utils/pdfExport";
+import { exportCardsToGoogleSheets } from "../utils/googleSheets";
 import { MarketPriceModal } from "./MarketPriceModal";
 import {
   ResponsiveContainer,
@@ -57,6 +58,10 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
   const [isMarketModalOpen, setIsMarketModalOpen] = useState(false);
   const [isBatchUpdatingPrices, setIsBatchUpdatingPrices] = useState(false);
 
+  // Google Sheets state
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
+
   // Edit form state
   const [editPlayerName, setEditPlayerName] = useState("");
   const [editCardNumber, setEditCardNumber] = useState("");
@@ -105,17 +110,16 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
       alert("Selecciona al menos una tarjeta usando las casillas de verificación para eliminar.");
       return;
     }
-    if (confirm(`¿Estás seguro de que deseas eliminar las ${selectedCardIds.length} tarjetas seleccionadas de tu base de datos?`)) {
-      const remainingCards = cards.filter((c) => !selectedCardIds.includes(c.id));
-      const updated = await saveEntireCollection(remainingCards);
-      setCards(updated);
-      setSelectedCardIds([]);
-      if (selectedCard && selectedCardIds.includes(selectedCard.id)) {
-        setSelectedCard(null);
-      }
-      setDbSaveMessage(`Se eliminaron ${selectedCardIds.length} tarjetas de la base de datos.`);
-      setTimeout(() => setDbSaveMessage(null), 4000);
+    const count = selectedCardIds.length;
+    const remainingCards = cards.filter((c) => !selectedCardIds.includes(c.id));
+    const updated = await saveEntireCollection(remainingCards);
+    setCards(updated);
+    setSelectedCardIds([]);
+    if (selectedCard && selectedCardIds.includes(selectedCard.id)) {
+      setSelectedCard(null);
     }
+    setDbSaveMessage(`Se eliminaron ${count} tarjeta(s) de la base de datos.`);
+    setTimeout(() => setDbSaveMessage(null), 4000);
   };
 
   const handleApplyBatchEdit = async () => {
@@ -177,6 +181,22 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
     setHasUnsavedChanges(true);
   };
 
+  const handleToggleSide = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const targetCard = cards.find((c) => c.id === id);
+    if (!targetCard) return;
+
+    const nextSide = targetCard.side === "back" ? "front" : "back";
+    const updatedCardObj: SavedCard = { ...targetCard, side: nextSide };
+    const updatedCollection = await updateSavedCard(updatedCardObj);
+    setCards(updatedCollection);
+    if (selectedCard?.id === id) {
+      setSelectedCard(updatedCardObj);
+    }
+    setDbSaveMessage(`Lado cambiado a ${nextSide === "back" ? "Reverso" : "Frente"}`);
+    setTimeout(() => setDbSaveMessage(null), 2000);
+  };
+
   const handleSaveDatabase = async () => {
     try {
       const savedList = await saveEntireCollection(cards);
@@ -206,23 +226,39 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
 
   const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (confirm("¿Seguro que quieres eliminar esta tarjeta de tu base de datos?")) {
-      const updated = await deleteSavedCard(id);
-      setCards(updated);
-      setSelectedCardIds((prev) => prev.filter((i) => i !== id));
-      if (selectedCard?.id === id) {
-        setSelectedCard(null);
-      }
-      setDbSaveMessage("Tarjeta eliminada de la base de datos con éxito.");
-      setTimeout(() => setDbSaveMessage(null), 3000);
+    const updated = await deleteSavedCard(id);
+    setCards(updated);
+    setSelectedCardIds((prev) => prev.filter((i) => i !== id));
+    if (selectedCard?.id === id) {
+      setSelectedCard(null);
     }
+    setDbSaveMessage("Tarjeta eliminada de la base de datos con éxito.");
+    setTimeout(() => setDbSaveMessage(null), 3000);
   };
 
   const handleClearAll = async () => {
-    if (confirm("¿Estás seguro de que deseas ELIMINAR TODA tu colección guardada? Esta acción no se puede deshacer.")) {
-      await clearDatabase();
-      setCards([]);
-      setSelectedCard(null);
+    await clearDatabase();
+    setCards([]);
+    setSelectedCard(null);
+    setSelectedCardIds([]);
+    setSheetsUrl(null);
+    setDbSaveMessage("¡Base de datos completamente vaciada y reiniciada! El programa está limpio para comenzar de nuevo.");
+    setTimeout(() => setDbSaveMessage(null), 5000);
+  };
+
+  const handleExportGoogleSheets = async () => {
+    if (cards.length === 0) return;
+    setIsExportingSheets(true);
+    try {
+      const result = await exportCardsToGoogleSheets(cards);
+      setSheetsUrl(result.spreadsheetUrl);
+      setDbSaveMessage("¡Colección exportada exitosamente a Google Sheets!");
+    } catch (err: any) {
+      if (err?.message !== "Exportación cancelada por el usuario.") {
+        alert(`Error al exportar a Google Sheets: ${err?.message || err}`);
+      }
+    } finally {
+      setIsExportingSheets(false);
     }
   };
 
@@ -594,11 +630,23 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
           {cards.length > 0 && (
             <button
               onClick={handleClearAll}
-              className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold transition-colors"
+              className="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              title="Eliminar absolutamente todos los datos guardados y reiniciar la base de datos limpia"
             >
-              Vaciar Colección
+              <RotateCcw className="w-3.5 h-3.5" />
+              Limpiar Base de Datos
             </button>
           )}
+
+          <button
+            onClick={handleExportGoogleSheets}
+            disabled={cards.length === 0 || isExportingSheets}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Exportar inventario completo directamente a Google Sheets"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            {isExportingSheets ? "Exportando..." : "Google Sheets"}
+          </button>
 
           <button
             onClick={() => generateCollectionPDF(cards)}
@@ -628,12 +676,74 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
         </div>
       </div>
 
+      {/* Storage & Drive Location Banner */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-lg text-slate-300 text-xs flex flex-wrap lg:flex-nowrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+            <Database className="w-5 h-5 text-blue-400" />
+          </div>
+          <div>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Ubicación de Almacenamiento Local</span>
+              <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-md">IndexedDB / LocalForage</span>
+            </p>
+            <p className="text-slate-400 text-[11px] mt-0.5">
+              Los registros e imágenes recortadas se almacenan de forma segura y privada directamente en el almacenamiento interno de tu navegador (IndexedDB: <code className="text-amber-400">cardcutter_database</code>).
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 border-t lg:border-t-0 lg:border-l border-slate-800 pt-3 lg:pt-0 lg:pl-4 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+            <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="font-bold text-slate-100 flex items-center gap-1.5">
+              <span>Google Sheets & Drive</span>
+            </p>
+            <a
+              href="https://drive.google.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:text-emerald-300 text-[11px] font-semibold flex items-center gap-1 mt-0.5"
+            >
+              Abrir en Google Drive (drive.google.com)
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* Save Notification Banner */}
       {dbSaveMessage && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 p-3.5 rounded-2xl flex items-center gap-3 text-xs font-semibold shadow-lg">
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
           <span className="flex-1">{dbSaveMessage}</span>
           <button onClick={() => setDbSaveMessage(null)} className="text-emerald-400 hover:text-white font-bold text-sm px-1">✕</button>
+        </div>
+      )}
+
+      {/* Google Sheets Created Link Banner */}
+      {sheetsUrl && (
+        <div className="p-4 bg-emerald-950/80 border border-emerald-500/50 rounded-2xl text-slate-100 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-300">¡Hoja de Google Sheets Creada con Éxito!</p>
+              <p className="text-xs text-slate-300 mt-0.5">Se ha guardado todo el inventario con totales y detalle completo de tarjetas en Google Drive.</p>
+            </div>
+          </div>
+          <a
+            href={sheetsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+          >
+            Abrir Hoja en Google Sheets
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       )}
 
@@ -978,7 +1088,7 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                   <th className="p-3 w-20">Año</th>
                   <th className="p-3 w-32 text-center">Inventario</th>
                   <th className="p-3 w-28 text-right">Valor Est. ($)</th>
-                  <th className="p-3 w-28 text-center">Acciones</th>
+                  <th className="p-3 w-36 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-medium text-slate-200">
@@ -1070,6 +1180,19 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                       <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <button
+                            onClick={(e) => handleToggleSide(card.id, e)}
+                            className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center gap-1 border cursor-pointer ${
+                              card.side === "back"
+                                ? "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
+                                : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                            }`}
+                            title="Cambiar Lado (Frente / Reverso)"
+                          >
+                            <Layers className="w-3 h-3" />
+                            <span>{card.side === "back" ? "Reverso" : "Frente"}</span>
+                          </button>
+
+                          <button
                             onClick={() => openDetailModal(card)}
                             className="p-1.5 rounded-lg bg-slate-800 hover:bg-amber-500 text-slate-300 hover:text-slate-950 transition-colors"
                             title="Editar información"
@@ -1150,9 +1273,25 @@ export const CollectionDashboard: React.FC<{ onClose: () => void }> = ({ onClose
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                    ${(card.estimatedValue || 0).toFixed(2)}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {/* Dynamic Clickable Side Switcher Button */}
+                    <button
+                      onClick={(e) => handleToggleSide(card.id, e)}
+                      className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border transition-all flex items-center gap-0.5 cursor-pointer ${
+                        card.side === "back"
+                          ? "bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30"
+                          : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                      }`}
+                      title="Haz clic para cambiar dinámicamente entre Frente y Reverso"
+                    >
+                      <Layers className="w-2.5 h-2.5" />
+                      <span>{card.side === "back" ? "Reverso" : "Frente"}</span>
+                    </button>
+
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                      ${(card.estimatedValue || 0).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="relative aspect-[3/4] bg-slate-950 flex items-center justify-center p-2">

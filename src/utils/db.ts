@@ -68,19 +68,19 @@ export const saveCardsToDatabase = async (cards: DetectedCard[], sourceImageName
         marketPriceData = await fetchMarketPriceForCard(card);
       }
 
-      // Check if item already exists by key or exact cropped image
-      const existingIndex = updatedCollection.findIndex(c => {
-        if (c.croppedDataUrl && card.croppedDataUrl && c.croppedDataUrl === card.croppedDataUrl) {
-          return true;
-        }
-        if (cardKey && cardKey !== "|||" && getCardKey(c) === cardKey) {
-          return true;
-        }
-        return false;
-      });
+      // STRICT MATCHING: Only merge quantity if BOTH playerName AND cardNumber are valid non-empty names!
+      const hasValidPlayer = card.playerName && card.playerName.trim() !== "" && card.playerName !== "Desconocido" && card.playerName !== "Sin Nombre" && card.playerName !== "Jugador Nuevo";
+      const hasValidNumber = card.cardNumber && card.cardNumber.trim() !== "" && card.cardNumber !== "0" && card.cardNumber !== "N/A";
+
+      let existingIndex = -1;
+      if (hasValidPlayer && hasValidNumber && cardKey && cardKey !== "|||") {
+        existingIndex = updatedCollection.findIndex(c => {
+          return getCardKey(c) === cardKey;
+        });
+      }
 
       if (existingIndex >= 0) {
-        // Increment quantity and update item info
+        // Increment quantity and update item info ONLY for valid matched card keys
         const match = updatedCollection[existingIndex];
         const currentQty = match.quantity && match.quantity > 0 ? match.quantity : 1;
         const addQty = card.quantity && card.quantity > 0 ? card.quantity : 1;
@@ -90,7 +90,6 @@ export const saveCardsToDatabase = async (cards: DetectedCard[], sourceImageName
           quantity: currentQty + addQty,
           savedAt: Date.now(),
           sourceImageName: match.sourceImageName || sourceImageName,
-          // Update price if available
           ...(marketPriceData || {}),
           ...(card.estimatedValue ? { estimatedValue: card.estimatedValue } : {})
         };
@@ -258,6 +257,7 @@ export const deduplicateCollection = async (): Promise<SavedCard[]> => {
 export const clearDatabase = async () => {
   try {
     await localforage.removeItem("saved_cards");
+    await localforage.clear();
   } catch (error) {
     console.error("Error clearing database:", error);
     throw error;

@@ -8,6 +8,7 @@ interface CardListGridProps {
   selectedCardId: string | null;
   onSelectCard: (id: string | null) => void;
   onRotateCard: (id: string) => void;
+  onToggleSideCard?: (id: string) => void;
   onEditCard: (card: DetectedCard) => void;
   onDownloadCard: (card: DetectedCard) => void;
   onDeleteCard: (id: string) => void;
@@ -20,6 +21,7 @@ export const CardListGrid: React.FC<CardListGridProps> = ({
   selectedCardId,
   onSelectCard,
   onRotateCard,
+  onToggleSideCard,
   onEditCard,
   onDownloadCard,
   onDeleteCard,
@@ -140,6 +142,7 @@ export const CardListGrid: React.FC<CardListGridProps> = ({
               isSelected={selectedCardId === card.id}
               onSelect={() => onSelectCard(card.id)}
               onRotate={() => onRotateCard(card.id)}
+              onToggleSide={onToggleSideCard ? () => onToggleSideCard(card.id) : undefined}
               onEdit={() => onEditCard(card)}
               onDownload={() => onDownloadCard(card)}
               onDelete={() => onDeleteCard(card.id)}

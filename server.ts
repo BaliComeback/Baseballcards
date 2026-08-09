@@ -66,7 +66,16 @@ Para CADA tarjeta encontrada:
 Sé preciso con el encuadre ajustado alrededor de los bordes físicos de cada tarjeta.`;
 
     let responseText = "";
-    const modelsToTry = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+    const modelsToTry = [
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash"
+    ];
 
     for (const modelName of modelsToTry) {
       try {
@@ -146,10 +155,11 @@ Sé preciso con el encuadre ajustado alrededor de los bordes físicos de cada ta
 
         if (response.text) {
           responseText = response.text;
+          console.log(`[DetectCards] Éxito con modelo: ${modelName}`);
           break;
         }
       } catch (e: any) {
-        console.log(`[DetectCards] Nota: Probando siguiente modelo tras error en ${modelName}`);
+        console.log(`[DetectCards] Probando siguiente modelo de respaldo tras intento con ${modelName}`);
       }
     }
 
@@ -256,8 +266,17 @@ Entrega los resultados en JSON con las siguientes propiedades exactas:
 - recentSales: un arreglo con 3 ventas de referencia realistas hipotéticas/históricas con { title, price, date, source }`;
 
     let responseText = "";
-    // Primary & secondary model attempts
-    const modelsToTry = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+    // Primary & secondary model attempts with automatic fallback
+    const modelsToTry = [
+      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash"
+    ];
     
     for (const modelName of modelsToTry) {
       try {

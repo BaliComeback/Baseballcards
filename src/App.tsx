@@ -82,10 +82,6 @@ export default function App() {
       setDetectionSummary(data.summary || `Se detectaron ${cardsWithCrops.length} tarjetas con éxito.`);
       if (cardsWithCrops.length > 0) {
         setSelectedCardId(cardsWithCrops[0].id);
-        // Automatic save to database as requested
-        await saveCardsToDatabase(cardsWithCrops, sourceImageName);
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3500);
       }
     } catch (err: any) {
       console.warn("Fallo análisis de API, probando fallback:", err);
@@ -97,6 +93,13 @@ export default function App() {
 
   // Process user uploaded file
   const handleImageSelected = async (file: File) => {
+    // Reset previous scan data completely
+    setSourceImage(null);
+    setSourceImageElement(null);
+    setDetectedCards([]);
+    setSelectedCardId(null);
+    setErrorMessage(null);
+
     // Set base filename without extension
     const baseName = file.name.replace(/\.[^/.]+$/, "");
     setSourceImageName(baseName || "Tarjetas_AI");
@@ -107,8 +110,6 @@ export default function App() {
       if (!dataUrl) return;
 
       setSourceImage(dataUrl);
-      setDetectedCards([]);
-      setSelectedCardId(null);
 
       try {
         const imgEl = await loadImageElement(dataUrl);
@@ -123,8 +124,14 @@ export default function App() {
 
   // Process sample binder page image
   const handleLoadSample = async () => {
-    setIsAnalyzing(true);
+    // Reset previous scan data completely
+    setSourceImage(null);
+    setSourceImageElement(null);
+    setDetectedCards([]);
+    setSelectedCardId(null);
     setErrorMessage(null);
+
+    setIsAnalyzing(true);
     setSourceImage(SAMPLE_BINDER_IMAGE_URL);
     setSourceImageName("Hoja_Muestra");
 
@@ -154,9 +161,6 @@ export default function App() {
         setDetectedCards(croppedSampleCards);
         setDetectionSummary(`Se cargó la imagen de prueba con ${croppedSampleCards.length} tarjetas identificadas.`);
         setSelectedCardId(croppedSampleCards[0].id);
-        await saveCardsToDatabase(croppedSampleCards, "Hoja_Muestra");
-        setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3500);
       }
     } catch (err) {
       setErrorMessage("Error al cargar la imagen de muestra.");
@@ -183,6 +187,18 @@ export default function App() {
             rotation: newRotation,
             croppedDataUrl: newCropped,
           };
+        }
+        return card;
+      })
+    );
+  };
+
+  const handleToggleSideCard = (id: string) => {
+    setDetectedCards((prevCards) =>
+      prevCards.map((card) => {
+        if (card.id === id) {
+          const nextSide = card.side === "back" ? "front" : "back";
+          return { ...card, side: nextSide };
         }
         return card;
       })
@@ -414,6 +430,7 @@ export default function App() {
               selectedCardId={selectedCardId}
               onSelectCard={handleSelectCard}
               onRotateCard={handleRotateCard}
+              onToggleSideCard={handleToggleSideCard}
               onEditCard={(card) => setEditingCard(card)}
               onDownloadCard={handleDownloadSingleCard}
               onDeleteCard={handleDeleteCard}

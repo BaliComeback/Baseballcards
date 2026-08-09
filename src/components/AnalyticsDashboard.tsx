@@ -14,7 +14,9 @@ import {
   Download,
   Calendar,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  FileSpreadsheet,
+  ExternalLink
 } from "lucide-react";
 import {
   BarChart,
@@ -29,6 +31,7 @@ import {
   Legend
 } from "recharts";
 import { generateCollectionPDF } from "../utils/pdfExport";
+import { exportCardsToGoogleSheets } from "../utils/googleSheets";
 
 const BRAND_COLORS = [
   "#f59e0b", // Amber
@@ -48,6 +51,8 @@ interface AnalyticsDashboardProps {
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onGoToDatabase }) => {
   const [cards, setCards] = useState<SavedCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isExportingSheets, setIsExportingSheets] = useState(false);
+  const [sheetsUrl, setSheetsUrl] = useState<string | null>(null);
 
   const loadDatabase = async () => {
     setIsLoading(true);
@@ -162,6 +167,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onGoToDa
     generateCollectionPDF(cards);
   };
 
+  const handleExportGoogleSheets = async () => {
+    if (cards.length === 0) return;
+    setIsExportingSheets(true);
+    try {
+      const result = await exportCardsToGoogleSheets(cards);
+      setSheetsUrl(result.spreadsheetUrl);
+    } catch (err: any) {
+      if (err?.message !== "Exportación cancelada por el usuario.") {
+        alert(`Error al exportar a Google Sheets: ${err?.message || err}`);
+      }
+    } finally {
+      setIsExportingSheets(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header Controls Banner */}
@@ -187,6 +207,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onGoToDa
           </button>
 
           <button
+            onClick={handleExportGoogleSheets}
+            disabled={cards.length === 0 || isExportingSheets}
+            className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
+            title="Exportar inventario completo directamente a Google Sheets"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
+            {isExportingSheets ? "Exportando..." : "Google Sheets"}
+          </button>
+
+          <button
             onClick={handleExportPDF}
             disabled={cards.length === 0}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg ${
@@ -201,6 +231,29 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ onGoToDa
           </button>
         </div>
       </div>
+
+      {sheetsUrl && (
+        <div className="p-4 bg-emerald-950/80 border border-emerald-500/50 rounded-2xl text-slate-100 flex flex-wrap items-center justify-between gap-3 shadow-xl animate-fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-300">¡Hoja de Google Sheets Creada con Éxito!</p>
+              <p className="text-xs text-slate-300 mt-0.5">Tu inventario y totales se han guardado en Google Drive.</p>
+            </div>
+          </div>
+          <a
+            href={sheetsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer"
+          >
+            Abrir Hoja en Google Sheets
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-center py-20 text-slate-400">Cargando análisis y estadísticas...</div>

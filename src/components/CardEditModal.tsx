@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { DetectedCard, ImageProcessingOptions } from "../types";
 import { cropCardFromImage, generateCardFilename } from "../utils/cropUtils";
-import { X, RotateCw, Save, Download, Sliders, Check, RefreshCw } from "lucide-react";
+import { X, RotateCw, Save, Download, Sliders, Check, RefreshCw, Layers } from "lucide-react";
 
 interface CardEditModalProps {
   card: DetectedCard | null;
@@ -111,13 +111,28 @@ export const CardEditModal: React.FC<CardEditModalProps> = ({
                 <div className="text-xs text-slate-500">Cargando vista previa...</div>
               )}
 
-              <button
-                onClick={handleRotate90}
-                className="absolute top-3 right-3 p-2 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-amber-400 transition-colors shadow-md"
-                title="Rotar 90°"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
+              <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                <button
+                  onClick={() => setSide(side === "back" ? "front" : "back")}
+                  className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-md flex items-center gap-1 cursor-pointer ${
+                    side === "back"
+                      ? "bg-purple-600 text-white border-purple-400 hover:bg-purple-500"
+                      : "bg-amber-500 text-slate-950 border-amber-400 hover:bg-amber-400"
+                  }`}
+                  title="Cambiar entre Frente y Reverso"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>{side === "back" ? "Reverso" : "Frente"}</span>
+                </button>
+
+                <button
+                  onClick={handleRotate90}
+                  className="p-2 rounded-lg bg-slate-900/90 border border-slate-700 text-slate-200 hover:text-amber-400 transition-colors shadow-md cursor-pointer"
+                  title="Rotar 90°"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Adjustments Panel */}
@@ -235,16 +250,49 @@ export const CardEditModal: React.FC<CardEditModalProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">Lado</label>
-                <select
-                  value={side}
-                  onChange={(e) => setSide(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500"
-                >
-                  <option value="front">Frente (Front)</option>
-                  <option value="back">Reverso (Back)</option>
-                  <option value="unknown">No especificado</option>
-                </select>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5 flex items-center justify-between">
+                  <span>Lado de la Tarjeta</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Alternar con 1 clic</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSide("front")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      side === "front"
+                        ? "bg-amber-500/20 text-amber-300 border-amber-500 shadow-md ring-1 ring-amber-500/50"
+                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Frente</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSide("back")}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      side === "back"
+                        ? "bg-purple-500/20 text-purple-300 border-purple-500 shadow-md ring-1 ring-purple-500/50"
+                        : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200 hover:border-slate-700"
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Reverso</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSide("unknown")}
+                    className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                      side === "unknown"
+                        ? "bg-slate-800 text-slate-200 border-slate-600 shadow-md"
+                        : "bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300"
+                    }`}
+                  >
+                    <span>Sin especificar</span>
+                  </button>
+                </div>
               </div>
             </div>
 
